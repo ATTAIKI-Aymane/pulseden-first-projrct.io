@@ -1,0 +1,6 @@
+PULSE_DEV_KEY="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"
+
+
+python -m uvicorn app.main:app --reload
+
+venv\Scripts\Activate.ps1
