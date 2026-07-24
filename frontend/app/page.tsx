@@ -4,7 +4,7 @@ import { useState } from "react";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
-const STEPS = ["ICP", "Sourcing", "Enrichment", "Signals", "Scoring", "Outreach", "Export"];
+const STEPS = ["ICP", "Sourcing", "Enrichment", "Contacts", "Signals", "Scoring", "Outreach", "Export"];
 
 function scoreColor(score: number, dark: boolean) {
   if (score >= 65) return dark ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-emerald-100 text-emerald-700 border-emerald-200";
@@ -69,17 +69,21 @@ export default function Home() {
       addLog("Enrichment cascade completed (with fallback handling)");
       setCurrentStep(4);
 
+      await fetch(`${API}/sessions/${sid}/contacts`, { method: "POST" });
+      addLog("Decision-makers identified (CEO / Founder)");
+      setCurrentStep(5);
+
       await fetch(`${API}/sessions/${sid}/signals`, { method: "POST" });
       addLog("Buying signals detected");
-      setCurrentStep(5);
+      setCurrentStep(6);
 
       await fetch(`${API}/sessions/${sid}/scoring`, { method: "POST" });
       addLog("Accounts scored & ranked");
-      setCurrentStep(6);
+      setCurrentStep(7);
 
       await fetch(`${API}/sessions/${sid}/outreach`, { method: "POST" });
       addLog("AI-personalized outreach generated");
-      setCurrentStep(7);
+      setCurrentStep(8);
 
       const exportRes = await fetch(`${API}/sessions/${sid}/export/preview`);
       const data = await exportRes.json();
@@ -242,6 +246,7 @@ export default function Home() {
                       <th className="py-3 px-2 font-medium">Company</th>
                       <th className="py-3 px-2 font-medium">Industry</th>
                       <th className="py-3 px-2 font-medium">Score</th>
+                      <th className="py-3 px-2 font-medium">Target Contact</th>
                       <th className="py-3 px-2 font-medium">Outreach Preview</th>
                     </tr>
                   </thead>
@@ -255,6 +260,32 @@ export default function Home() {
                           <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold border ${scoreColor(r.total_score, dark)}`}>
                             {r.total_score}
                           </span>
+                        </td>
+                        <td className="py-3 px-2">
+                          {r.contact_name ? (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-medium text-slate-800 dark:text-slate-100 text-[13px]">
+                                {r.contact_name}
+                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="inline-block w-fit text-[10px] font-semibold px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-500/20">
+                                  {r.contact_title}
+                                </span>
+                                {r.contact_linkedin && (
+                                  
+                                    href={r.contact_linkedin}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[11px] text-sky-600 dark:text-sky-400 hover:underline"
+                                  >
+                                    LinkedIn ↗
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400 dark:text-slate-600">No contact found</span>
+                          )}
                         </td>
                         <td className="py-3 px-2 text-slate-500 dark:text-slate-400 max-w-sm truncate">{r.outreach_message}</td>
                       </tr>

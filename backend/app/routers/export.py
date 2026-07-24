@@ -22,6 +22,7 @@ def build_export_data(session_id: int, db: DBSession):
         score = db.query(models.Score).filter(models.Score.account_id == account.id).first()
         sequence = db.query(models.Sequence).filter(models.Sequence.account_id == account.id).first()
         signals = db.query(models.Signal).filter(models.Signal.account_id == account.id).all()
+        contact = db.query(models.Contact).filter(models.Contact.account_id == account.id).first()
 
         rows.append({
             "rank": score.rank if score else None,
@@ -34,6 +35,10 @@ def build_export_data(session_id: int, db: DBSession):
             "total_score": score.total_score if score else None,
             "num_signals": len(signals),
             "top_signal": signals[0].description if signals else "",
+            "contact_name": contact.full_name if contact else "",
+            "contact_title": contact.job_title if contact else "",
+            "contact_linkedin": contact.linkedin_url if contact else "",
+            "contact_email": contact.email if contact else "",
             "outreach_subject": sequence.subject if sequence else "",
             "outreach_message": sequence.message_body if sequence else "",
         })
