@@ -64,3 +64,17 @@ class AccountResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+        # ---------- Contact ----------
+class ContactResponse(BaseModel):
+    id: int
+    account_id: int
+    full_name: str
+    job_title: str
+    linkedin_url: Optional[str] = None
+    email: Optional[str] = None
+    source: str
+
+    class Config:
+        from_attributes = True

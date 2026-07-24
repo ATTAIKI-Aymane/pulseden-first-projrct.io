@@ -46,12 +46,29 @@ class Account(Base):
     source = Column(String)
     raw_data = Column(Text)     # JSON string
     created_at = Column(DateTime, default=datetime.utcnow)
-
+    
     session = relationship("Session", back_populates="accounts")
     enrichments = relationship("EnrichmentData", back_populates="account")
+    contact = relationship("Contact", back_populates="account", uselist=False)
     signals = relationship("Signal", back_populates="account")
     score = relationship("Score", back_populates="account", uselist=False)
     sequence = relationship("Sequence", back_populates="account", uselist=False)
+    contact = relationship("Contact", back_populates="account", uselist=False)
+
+
+class Contact(Base):
+    __tablename__ = "contacts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("accounts.id"))
+    full_name = Column(String)
+    job_title = Column(String)          # "CEO", "Founder", "Co-Founder"...
+    linkedin_url = Column(String)
+    email = Column(String, nullable=True)
+    source = Column(String, default="mock_contact_finder")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    account = relationship("Account", back_populates="contact")
 
 
 class EnrichmentData(Base):
