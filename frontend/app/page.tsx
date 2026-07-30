@@ -186,7 +186,7 @@ export default function Home() {
                   onChange={(e) => setCompanyCount(Math.min(100, Math.max(1, Number(e.target.value) || 1)))}
                 />
               </div>
-            </div>
+              </div>
 
             <button
               onClick={startPipeline}
