@@ -37,18 +37,27 @@ export default function Home() {
     setResults([]);
     setCurrentStep(0);
     try {
+      const checkOk = async (res: Response, step: string) => {
+        if (!res.ok) {
+          const body = await res.text();
+          throw new Error(`${step} failed (${res.status}): ${body}`);
+        }
+        return res;
+      };
+
       const sessionRes = await fetch(`${API}/sessions/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: `Session ${Date.now()}` }),
       });
+      await checkOk(sessionRes, "Session creation");
       const session = await sessionRes.json();
       const sid = session.id;
       setSessionId(sid);
       addLog(`Session #${sid} created`);
       setCurrentStep(1);
 
-      await fetch(`${API}/sessions/${sid}/icp`, {
+      const icpRes = await fetch(`${API}/sessions/${sid}/icp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -59,34 +68,42 @@ export default function Home() {
           keywords: icp.keywords.split(",").map((s) => s.trim()),
         }),
       });
+      await checkOk(icpRes, "ICP");
       addLog("ICP profile defined");
       setCurrentStep(2);
 
-      await fetch(`${API}/sessions/${sid}/sourcing?count=${companyCount}`, { method: "POST" });
+      const sourcingRes = await fetch(`${API}/sessions/${sid}/sourcing?count=${companyCount}`, { method: "POST" });
+      await checkOk(sourcingRes, "Sourcing");
       addLog(`Sourcing completed — ${companyCount} accounts identified`);
       setCurrentStep(3);
 
-      await fetch(`${API}/sessions/${sid}/enrichment`, { method: "POST" });
+      const enrichRes = await fetch(`${API}/sessions/${sid}/enrichment`, { method: "POST" });
+      await checkOk(enrichRes, "Enrichment");
       addLog("Enrichment cascade completed (with fallback handling)");
       setCurrentStep(4);
 
-      await fetch(`${API}/sessions/${sid}/contacts`, { method: "POST" });
+      const contactsRes = await fetch(`${API}/sessions/${sid}/contacts`, { method: "POST" });
+      await checkOk(contactsRes, "Contacts");
       addLog("Decision-makers identified (CEO / Founder)");
       setCurrentStep(5);
 
-      await fetch(`${API}/sessions/${sid}/signals`, { method: "POST" });
+      const signalsRes = await fetch(`${API}/sessions/${sid}/signals`, { method: "POST" });
+      await checkOk(signalsRes, "Signals");
       addLog("Buying signals detected");
       setCurrentStep(6);
 
-      await fetch(`${API}/sessions/${sid}/scoring`, { method: "POST" });
+      const scoringRes = await fetch(`${API}/sessions/${sid}/scoring`, { method: "POST" });
+      await checkOk(scoringRes, "Scoring");
       addLog("Accounts scored & ranked");
       setCurrentStep(7);
 
-      await fetch(`${API}/sessions/${sid}/outreach`, { method: "POST" });
+      const outreachRes = await fetch(`${API}/sessions/${sid}/outreach`, { method: "POST" });
+      await checkOk(outreachRes, "Outreach");
       addLog("AI-personalized outreach generated");
       setCurrentStep(8);
 
       const exportRes = await fetch(`${API}/sessions/${sid}/export/preview`);
+      await checkOk(exportRes, "Export");
       const data = await exportRes.json();
       setResults(data);
       addLog("Pipeline complete — results ready");
