@@ -1,144 +1,102 @@
-import os
-import requests
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session as DBSession
-from faker import Faker
-import random
-import json
 
 from app.database import get_db
-from app import models, schemas
+from app import models
 
-router = APIRouter(prefix="/sessions", tags=["Sourcing"])
-fake = Faker()
-
-APIFY_TOKEN = os.getenv("APIFY_TOKEN")
-LEADS_FINDER_ACTOR = "code_crafter~leads-finder"
-
-TECH_KEYWORDS = ["AI", "Cloud", "Data", "Sync", "Flow", "Stack", "Labs", "Hub", "Wave", "Core"]
-SUFFIXES = ["Inc", "Technologies", "Solutions", "Group", "Systems"]
+router = APIRouter(prefix="/sessions", tags=["Scoring"])
 
 
-def generate_company_mock(icp: models.ICPProfile):
-    """Mode demo — donnees generees (Faker), utilise si use_real_data=false."""
-    keyword = random.choice(TECH_KEYWORDS)
-    suffix = random.choice(SUFFIXES)
-    company_name = f"{fake.last_name()}{keyword} {suffix}"
-    domain = f"{company_name.lower().replace(' ', '')}.com"
+def calculate_fit_score(account: models.Account, icp: models.ICPProfile):
+    """Calcule le score de correspondance ICP (0-100)"""
+    score = 40  # base score
 
-    industry = icp.industry if random.random() < 0.7 else fake.job().split()[0]
+    if account.industry == icp.industry:
+        score += 35
+    if account.location == icp.location:
+        score += 25
 
-    return {
-        "company_name": company_name,
-        "domain": domain,
-        "industry": industry,
-        "size": icp.company_size,
-        "location": icp.location if random.random() < 0.8 else fake.country(),
-        "source": "mock_sourcing_engine",
-        "raw_data": json.dumps({
-            "employees_estimate": random.randint(20, 500),
-            "founded_year": random.randint(2005, 2022),
-        }),
+    return min(score, 100)
+
+
+def calculate_signal_score(signals: list[models.Signal]):
+    """Calcule le score basé sur les signaux détectés (0-100)"""
+    if not signals:
+        return 0
+
+    weights = {
+        "funding_round": 30,
+        "leadership_change": 25,
+        "hiring": 20,
+        "tech_change": 15,
     }
 
+    total = 0
+    for s in signals:
+        base_weight = weights.get(s.signal_type, 10)
+        total += base_weight * (s.confidence_score / 100)
 
-def fetch_real_leads(icp: models.ICPProfile, count: int) -> list[dict]:
-    """
-    Appelle l'actor Apify 'Leads Finder' avec les filtres de l'ICP.
-    Chaque lead retourne contient a la fois les donnees company ET contact
-    (nom, poste, email verifie, LinkedIn) en un seul appel.
-    """
-    if not APIFY_TOKEN:
-        raise HTTPException(status_code=500, detail="APIFY_TOKEN manquant dans backend/.env")
-
-    job_titles = json.loads(icp.job_titles) if icp.job_titles else []
-
-    payload = {
-        "contact_job_title": job_titles,
-        "company_industry": [icp.industry] if icp.industry else [],
-        "contact_location": [icp.location] if icp.location else [],
-        "size": [icp.company_size] if icp.company_size else [],
-        "email_status": ["validated", "unknown"],
-        "fetch_count": count,
-    }
-
-    url = f"https://api.apify.com/v2/acts/{LEADS_FINDER_ACTOR}/run-sync-get-dataset-items?token={APIFY_TOKEN}"
-    resp = requests.post(url, json=payload, timeout=180)
-    resp.raise_for_status()
-    return resp.json()
+    return min(round(total, 1), 100)
 
 
-@router.post("/{session_id}/sourcing", response_model=list[schemas.AccountResponse])
-def run_sourcing(
-    session_id: int,
-    count: int = 15,
-    use_real_data: bool = True,
-    db: DBSession = Depends(get_db),
-):
+@router.post("/{session_id}/scoring")
+def run_scoring(session_id: int, db: DBSession = Depends(get_db)):
     session = db.query(models.Session).filter(models.Session.id == session_id).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
     icp = db.query(models.ICPProfile).filter(models.ICPProfile.session_id == session_id).first()
     if not icp:
-        raise HTTPException(status_code=400, detail="Define an ICP first before sourcing")
+        raise HTTPException(status_code=400, detail="ICP not found")
 
-    accounts = []
+    accounts = db.query(models.Account).filter(models.Account.session_id == session_id).all()
+    if not accounts:
+        raise HTTPException(status_code=400, detail="No accounts found")
 
-    if use_real_data:
-        leads = fetch_real_leads(icp, count)
-        if not leads:
-            raise HTTPException(
-                status_code=404,
-                detail="Aucun lead reel trouve pour cet ICP. Essaie d'elargir les filtres (industry/location/job_titles).",
-            )
+    scored_accounts = []
+    for account in accounts:
+        signals = db.query(models.Signal).filter(models.Signal.account_id == account.id).all()
 
-        for lead in leads:
-            account = models.Account(
-                session_id=session_id,
-                company_name=lead.get("company_name") or "Unknown",
-                domain=lead.get("company_domain"),
-                industry=lead.get("industry") or icp.industry,
-                size=lead.get("company_size") or icp.company_size,
-                location=lead.get("city") or icp.location,
-                source="apify_leads_finder",
-                raw_data=json.dumps({
-                    "company_website": lead.get("company_website"),
-                    "company_linkedin": lead.get("company_linkedin"),
-                    "founded_year": lead.get("company_founded_year"),
-                    "revenue": lead.get("company_annual_revenue"),
-                }),
-            )
-            db.add(account)
-            db.flush()
+        fit = calculate_fit_score(account, icp)
+        signal = calculate_signal_score(signals)
+        total = round((fit * 0.5) + (signal * 0.5), 1)
 
-            if lead.get("full_name"):
-                contact = models.Contact(
-                    account_id=account.id,
-                    full_name=lead.get("full_name"),
-                    job_title=lead.get("job_title") or "Unknown",
-                    linkedin_url=lead.get("linkedin"),
-                    email=lead.get("email"),
-                    source="apify_leads_finder",
-                )
-                db.add(contact)
+        scored_accounts.append({"account": account, "fit": fit, "signal": signal, "total": total})
 
-            accounts.append(account)
-    else:
-        for _ in range(count):
-            data = generate_company_mock(icp)
-            account = models.Account(session_id=session_id, **data)
-            db.add(account)
-            accounts.append(account)
+    scored_accounts.sort(key=lambda x: x["total"], reverse=True)
 
-    session.current_step = 3
+    for rank, item in enumerate(scored_accounts, start=1):
+        score_entry = models.Score(
+            account_id=item["account"].id,
+            fit_score=item["fit"],
+            signal_score=item["signal"],
+            total_score=item["total"],
+            rank=rank,
+        )
+        db.add(score_entry)
+
+    session.current_step = 6
     db.commit()
-    for a in accounts:
-        db.refresh(a)
 
-    return accounts
+    return {"message": f"Scoring completed for {len(accounts)} accounts"}
 
 
-@router.get("/{session_id}/accounts", response_model=list[schemas.AccountResponse])
-def get_accounts(session_id: int, db: DBSession = Depends(get_db)):
-    return db.query(models.Account).filter(models.Account.session_id == session_id).all()
+@router.get("/{session_id}/scoring")
+def get_scores(session_id: int, db: DBSession = Depends(get_db)):
+    accounts = db.query(models.Account).filter(models.Account.session_id == session_id).all()
+
+    results = []
+    for account in accounts:
+        score = db.query(models.Score).filter(models.Score.account_id == account.id).first()
+        if score:
+            results.append({
+                "account_id": account.id,
+                "company_name": account.company_name,
+                "fit_score": score.fit_score,
+                "signal_score": score.signal_score,
+                "total_score": score.total_score,
+                "rank": score.rank,
+            })
+
+    results.sort(key=lambda x: x["rank"])
+    return results
