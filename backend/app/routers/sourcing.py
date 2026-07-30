@@ -130,7 +130,7 @@ def fetch_real_leads(icp: models.ICPProfile, count: int) -> list[dict]:
         "contact_location": [icp.location.lower()] if icp.location else [],
         "size": normalize_company_size(icp.company_size),
         "email_status": ["validated", "unknown"],
-        "fetch_count": count,
+        "fetch_count": count + 10,  # marge pour compenser les leads sans company_name
     }
 
     url = f"https://api.apify.com/v2/acts/{LEADS_FINDER_ACTOR}/run-sync-get-dataset-items?token={APIFY_TOKEN}"
@@ -170,9 +170,12 @@ def run_sourcing(
             )
 
         for lead in leads:
+            if not lead.get("company_name"):
+                continue  # skip les leads sans nom d'entreprise reel
+
             account = models.Account(
                 session_id=session_id,
-                company_name=lead.get("company_name") or "Unknown",
+                company_name=lead.get("company_name"),
                 domain=lead.get("company_domain"),
                 industry=lead.get("industry") or icp.industry,
                 size=str(lead.get("company_size")) if lead.get("company_size") else icp.company_size,

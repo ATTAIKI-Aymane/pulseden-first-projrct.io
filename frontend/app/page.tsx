@@ -24,8 +24,8 @@ export default function Home() {
   const [icp, setIcp] = useState({
     industry: "SaaS",
     company_size: "50-200",
-    location: "France",
-    job_titles: "CTO, VP Sales",
+    location: "United States",
+    job_titles: "CEO, Founder, CTO, VP Sales",
     keywords: "B2B, cloud",
   });
 
