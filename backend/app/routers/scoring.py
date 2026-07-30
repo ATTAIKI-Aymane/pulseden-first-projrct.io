@@ -65,15 +65,7 @@ def fetch_real_leads(icp: models.ICPProfile, count: int) -> list[dict]:
     url = f"https://api.apify.com/v2/acts/{LEADS_FINDER_ACTOR}/run-sync-get-dataset-items?token={APIFY_TOKEN}"
     resp = requests.post(url, json=payload, timeout=180)
     resp.raise_for_status()
-    results = resp.json()
-
-    if results:
-        print("=== DEBUG: RAW LEAD KEYS ===")
-        print(list(results[0].keys()))
-        print(results[0])
-        print("=============================")
-
-    return results
+    return resp.json()
 
 
 @router.post("/{session_id}/sourcing", response_model=list[schemas.AccountResponse])
