@@ -141,7 +141,17 @@ def fetch_real_leads(icp: models.ICPProfile, count: int) -> list[dict]:
         print("=== DEBUG: APIFY ERROR RESPONSE ===")
         print(resp.status_code, resp.text)
     resp.raise_for_status()
-    return resp.json()
+    results = resp.json()
+
+    with_name = sum(1 for r in results if r.get("company_name"))
+    print(f"=== DEBUG: {len(results)} leads total, {with_name} have company_name ===")
+    if results:
+        print("=== DEBUG: sample lead keys ===", list(results[0].keys()))
+        if "error" in results[0]:
+            print("=== DEBUG: ACTOR ERROR CONTENT ===")
+            print(results[0])
+
+    return results
 
 
 @router.post("/{session_id}/sourcing", response_model=list[schemas.AccountResponse])

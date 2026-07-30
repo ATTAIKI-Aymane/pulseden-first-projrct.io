@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import session, sourcing, enrichment, contacts, signals, scoring, outreach, export
+from app.routers import session, sourcing, enrichment, contacts, signals, scoring, outreach, export, import_data
 
 app = FastAPI(title="PulseDev B2B GTM Platform")
 
@@ -21,6 +21,7 @@ app.include_router(signals.router)
 app.include_router(scoring.router)
 app.include_router(outreach.router)
 app.include_router(export.router)
+app.include_router(import_data.router)
 
 
 @app.get("/")
